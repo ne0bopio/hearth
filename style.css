@@ -1,0 +1,167 @@
+/* Kick green on black. One heavy condensed face for anything big, a squared sans for
+   labels. The fonts ship in fonts/ (SIL OFL), so it looks the same offline on Ubuntu. */
+@font-face { font-family: "Anton"; src: url("fonts/anton-latin-400-normal.woff2") format("woff2"); font-display: block; }
+@font-face { font-family: "Rajdhani"; font-weight: 500; src: url("fonts/rajdhani-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Rajdhani"; font-weight: 700; src: url("fonts/rajdhani-latin-700-normal.woff2") format("woff2"); }
+
+:root {
+  --g: #53FC18;  /* kick green */
+  --g2: #2E9C0C;
+  --k: #0A0A0A;
+  --w: #F2F2EE;
+  --muted: #B4BFA9;
+  --card: rgba(10, 10, 10, 0.9);
+  --line: rgba(83, 252, 24, 0.32);
+  --display: Anton, "Ubuntu Condensed", Impact, sans-serif;
+  --label: Rajdhani, Ubuntu, "DejaVu Sans", sans-serif;
+  --stripe: repeating-linear-gradient(90deg, var(--g) 0 40px, transparent 40px 80px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  background: #000;
+  color: var(--w);
+  font-family: var(--label);
+  font-weight: 500;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  cursor: none; /* touchscreen: no mouse pointer floating over the fire */
+}
+
+canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#embers { pointer-events: none; }
+#fire-video { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; background: #000; }
+
+#glow {
+  position: fixed; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 115%, rgba(255, 110, 30, 0.2), transparent 60%),
+    radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.6));
+}
+
+#dim {
+  position: fixed; inset: 0; background: #000; opacity: 0;
+  pointer-events: none; transition: opacity 1.2s linear;
+}
+
+/* goblins walk on the hearth floor */
+#goblins { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.goblin { position: absolute; left: 0; bottom: 1.5vh; pointer-events: auto; will-change: transform; }
+.goblin svg {
+  display: block; width: 100%; height: 100%; overflow: visible;
+  filter: drop-shadow(0 0 8px rgba(255, 120, 30, 0.35)); /* firelight on the outline */
+}
+.bubble {
+  position: absolute; bottom: calc(100% + 14px);
+  padding: 0.3em 0.55em 0.24em;
+  background: var(--g); color: var(--k);
+  font-family: var(--display); font-size: clamp(22px, 2.5vw, 42px); line-height: 1.05;
+  text-transform: uppercase; letter-spacing: 0.01em; white-space: nowrap;
+  filter: drop-shadow(5px 5px 0 var(--k));
+  opacity: 0;
+}
+.bubble::after { content: ""; position: absolute; top: 100%; border: 12px solid transparent; border-top-color: var(--g); }
+.bubble.right { left: 54%; transform-origin: 0 100%; }
+.bubble.right::after { left: 12px; border-left-color: var(--g); }
+.bubble.left { right: 54%; transform-origin: 100% 100%; }
+.bubble.left::after { right: 12px; border-right-color: var(--g); }
+
+/* ambient clock */
+#ambient {
+  position: fixed; top: 4vh; right: 4vw; text-align: right;
+  color: rgba(242, 242, 238, 0.86);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+#ambient.away { opacity: 0; }
+#ambient .t { font-family: var(--display); font-size: clamp(30px, 4.8vw, 64px); line-height: 1; }
+#a-temp { margin-left: 0.4em; font-size: 0.62em; color: var(--g); }
+#ambient .timer { font-family: var(--display); font-size: clamp(20px, 2.6vw, 34px); color: var(--g); margin-top: 0.25em; }
+
+/* panel */
+#panel {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column; gap: 2.4vh;
+  padding: 4vh 4vw;
+  background:
+    linear-gradient(rgba(83, 252, 24, 0.07) 1px, transparent 1px) 0 0 / 64px 64px,
+    linear-gradient(90deg, rgba(83, 252, 24, 0.07) 1px, transparent 1px) 0 0 / 64px 64px,
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.25) 38%, rgba(0, 0, 0, 0.85));
+  animation: fade-in 0.25s ease-out;
+}
+@keyframes fade-in { from { opacity: 0; } }
+
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 4vw; }
+#time { font-family: var(--display); font-size: clamp(56px, min(12vw, 19vh), 170px); line-height: 0.9; font-variant-numeric: tabular-nums; }
+#date, #w-desc, #w-range { font-weight: 700; text-transform: uppercase; letter-spacing: 0.18em; }
+#date { font-size: clamp(16px, 2vw, 26px); color: var(--g); margin-top: 0.7em; }
+#weather { text-align: right; }
+#w-temp { font-family: var(--display); font-size: clamp(52px, 8vw, 112px); line-height: 0.9; }
+#w-desc, #w-range { font-size: clamp(14px, 1.7vw, 22px); color: var(--muted); margin-top: 0.5em; }
+
+.spacer { flex: 1; }
+.stripe { flex: none; height: 10px; margin: 0 -4vw; background: var(--stripe); }
+
+/* five cards stay on one row down to ~1280px wide, so Done never drops off a short screen */
+.controls {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+.card {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-top: 6px solid var(--g);
+  padding: 14px 16px 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+h2 { font-family: var(--display); font-weight: 400; font-size: 28px; line-height: 1; text-transform: uppercase; letter-spacing: 0.02em; }
+.hint { color: var(--muted); font-size: 17px; line-height: 1.2; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.row.between { justify-content: space-between; align-items: center; min-height: 56px; }
+.readout { font-family: var(--display); font-size: 28px; color: var(--g); font-variant-numeric: tabular-nums; }
+
+.chip {
+  min-height: 56px; min-width: 64px; padding: 6px 14px;
+  line-height: 1.1; text-align: center; /* a long label wraps inside a narrow card */
+  border: 2px solid var(--line); border-radius: 0;
+  background: rgba(242, 242, 238, 0.04);
+  color: var(--w);
+  font-family: var(--label); font-weight: 700; font-size: 19px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: none;
+}
+.chip:active { background: rgba(83, 252, 24, 0.22); }
+.chip[aria-pressed="true"] { background: var(--g); border-color: var(--g); color: var(--k); }
+.done {
+  align-self: center; min-width: 260px; min-height: 64px;
+  background: var(--g); border-color: var(--g); color: var(--k);
+  font-family: var(--display); font-weight: 400; font-size: 32px; letter-spacing: 0.06em;
+}
+.done:active { background: var(--g2); border-color: var(--g2); }
+
+label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 40px; background: transparent; cursor: none; }
+input[type="range"]::-webkit-slider-runnable-track { height: 8px; background: rgba(83, 252, 24, 0.28); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 34px; height: 34px; margin-top: -13px;
+  border-radius: 50%; background: var(--g); border: 5px solid var(--k); box-shadow: 0 0 0 2px var(--g);
+}
+
+/* alarm: the banner's green band */
+#alarm {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; flex-direction: column; justify-content: center; gap: 2.4vh;
+  background: rgba(0, 0, 0, 0.72);
+}
+#alarm .stripe { margin: 0; }
+#alarm .band { background: var(--g); padding: 2.5vh 4vw 2vh; animation: flash 1.6s ease-in-out infinite; }
+#alarm .big { font-family: var(--display); font-size: clamp(80px, 15vw, 230px); line-height: 0.9; text-transform: uppercase; color: var(--k); }
+#alarm .hint { padding: 0 4vw; font-size: 24px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: var(--g); }
+@keyframes flash { 50% { background: var(--w); } }

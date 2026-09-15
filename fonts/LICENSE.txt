@@ -1,0 +1,4 @@
+Anton: Copyright 2020 The Anton Project Authors (https://github.com/googlefonts/AntonFont).
+Rajdhani: Copyright 2014 Indian Type Foundry.
+Both are licensed under the SIL Open Font License 1.1: https://openfontlicense.org
+Files are the latin subsets from Fontsource.

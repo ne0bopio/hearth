@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Hearth</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="fire"></canvas>
+  <canvas id="embers"></canvas>
+  <!-- if fire.mp4 exists it replaces the drawn fire (app.js) -->
+  <video id="fire-video" src="fire.mp4" muted loop playsinline autoplay hidden></video>
+  <div id="glow"></div>
+  <!-- goblins walk by here, under #dim so sleep and brightness reach them too -->
+  <div id="goblins"></div>
+  <div id="dim"></div>
+
+  <!-- always on, faint, over the fire -->
+  <div id="ambient">
+    <div class="t"><span id="a-time"></span><span id="a-temp"></span></div>
+    <div class="timer" id="a-timer" hidden></div>
+  </div>
+
+  <!-- tap anywhere to open -->
+  <main id="panel" hidden>
+    <header>
+      <div class="clock">
+        <div id="time"></div>
+        <div id="date"></div>
+      </div>
+      <div id="weather" hidden>
+        <div id="w-temp"></div>
+        <div id="w-desc"></div>
+        <div id="w-range"></div>
+      </div>
+    </header>
+
+    <div class="spacer"></div>
+    <div class="stripe"></div>
+
+    <section class="controls">
+      <div class="card">
+        <h2>Timer</h2>
+        <div class="row">
+          <button class="chip" data-timer="5">5m</button>
+          <button class="chip" data-timer="10">10m</button>
+          <button class="chip" data-timer="25">25m</button>
+          <button class="chip" data-timer="60">1h</button>
+        </div>
+        <div class="row between">
+          <span id="timer-readout" class="readout"></span>
+          <button class="chip" id="timer-cancel" hidden>Cancel</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Sleep</h2>
+        <p class="hint">The fire burns down and goes quiet.</p>
+        <div class="row">
+          <button class="chip" data-sleep="0" aria-pressed="true">Off</button>
+          <button class="chip" data-sleep="15">15m</button>
+          <button class="chip" data-sleep="30">30m</button>
+          <button class="chip" data-sleep="60">1h</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Fire</h2>
+        <label id="flame-label">Flame <input type="range" id="flame" min="0" max="1" step="0.01"></label>
+        <label>Warmth <input type="range" id="warmth" min="0" max="1" step="0.01"></label>
+        <label>Brightness <input type="range" id="brightness" min="0.25" max="1" step="0.01"></label>
+      </div>
+
+      <div class="card">
+        <h2>Sound</h2>
+        <div class="row">
+          <button class="chip" id="sound-toggle">Crackle</button>
+          <button class="chip" id="clock-toggle">Clock on fire</button>
+        </div>
+        <label>Volume <input type="range" id="volume" min="0" max="1" step="0.01"></label>
+      </div>
+
+      <div class="card">
+        <h2>Goblins</h2>
+        <p class="hint">Now and then one walks by and offers you something.</p>
+        <div class="row">
+          <button class="chip" id="goblin-toggle">Visits</button>
+          <button class="chip" id="goblin-call">Call one</button>
+        </div>
+      </div>
+    </section>
+
+    <button class="chip done" id="close">Done</button>
+  </main>
+
+  <div id="alarm" hidden>
+    <div class="stripe"></div>
+    <div class="band"><div class="big">Time's up</div></div>
+    <div class="stripe"></div>
+    <div class="hint">Tap anywhere</div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="fire.js"></script>
+  <script src="sound.js"></script>
+  <script src="goblins.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

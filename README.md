@@ -18,12 +18,14 @@ Styled in Kick green on black.
 - It's a plain HTML page. Chromium opens it full screen (`--kiosk`) when he logs in.
 
 ## Install or update on his PC
-In a terminal, with internet (git isn't needed):
+First time:
 ```bash
-cd ~ && wget -qO- https://github.com/ne0bopio/hearth/archive/refs/heads/main.tar.gz | tar xz && { [ -f hearth/config.js ] && cp hearth/config.js hearth-main/; mkdir -p hearth && cp -r hearth-main/. hearth/ && rm -rf hearth-main; } && cd hearth && chmod +x install.sh uninstall.sh && ./install.sh
+git clone https://github.com/ne0bopio/hearth ~/hearth && cd ~/hearth && ./install.sh
 ```
-It downloads into `~/hearth`, keeps his `config.js` if one is already there, and starts Hearth.
-The same command updates it later.
+To update, from `~/hearth` (his `config.js` edits are kept):
+```bash
+git pull --autostash && ./install.sh
+```
 
 For the weather, edit `~/hearth/config.js` (city, latitude and longitude, °F or °C), then run
 `cd ~/hearth && ./install.sh` again to restart it.
@@ -37,4 +39,4 @@ The installer turns off screen blanking and the lock screen. Otherwise the fire 
 - Goblins: Visits turns them on or off. Call one sends one right now. How often they come and
   what they say can be changed at the bottom of `config.js`.
 - Leave kiosk mode: Alt+F4 (needs a keyboard).
-- Update: run the install command above again. His `config.js` stays as it is.
+- Update: `git pull --autostash && ./install.sh` from `~/hearth`.

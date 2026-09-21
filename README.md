@@ -46,17 +46,28 @@ The installer turns off screen blanking and the lock screen. Otherwise the fire 
 - Update: `git pull --autostash && ./install.sh` from `~/hearth`.
 
 ## The game: «Invasión»
-Goblins in saucers come down in formation; the martian's ship shoots them from below.
+Goblins in saucers come down in formation; the martian's ship shoots them from below. Three lives.
+It ends when the third one is gone, or the moment a saucer lands.
 
 | | Keyboard | Touch |
 |---|---|---|
 | Move | ← → or A / D | drag a finger sideways |
 | Shoot | Space | fires by itself while the finger is down |
 | Pause | P | Pausa button |
-| Back to the fire | Esc | Salir button |
+| Back to the fire | Esc | Salir button (top right, and on Game Over) |
+| Play again | Enter on Game Over | Reintentar button |
 
+- Points: 10 / 20 / 40 by row (cigar, bottle, squad boss: green, white and gold rim). The mystery
+  saucer that crosses at the back gives 50–300. The record is kept in the browser's localStorage.
+- The goblins shoot back. Three shields take hits from both sides, your own shots included, and
+  saucers flatten them when they get that far. Each wave starts closer, moves faster and shoots more.
+- Every third wave is the goblin mothership: a health bar, fans of shots aimed at you, 500 points
+  times its number. Beating it brings fresh shields.
 - If the Hearth timer goes off mid-game, the game pauses and the alarm shows on top. Sleep keeps
   counting while you play; leaving the game doesn't restart it.
 - For checking: `index.html?game=1` opens the game directly. `index.html?game=1&at=12` plays 12 s
-  with an autopilot, draws that single frame and stops, so a screenshot always shows the same thing.
-- Built so far: phase 1 (it plays). Lives, score, enemy fire, shields and the mothership come next.
+  with an autopilot and a fixed random seed, draws that single frame and stops, so a screenshot
+  always shows the same thing (it never writes a record). `&wave=5` starts at wave 5, `&boss=1` at
+  the first mothership; both work with or without `at`.
+- Built so far: phases 1 and 2 (it plays, it's a game). Next: the martian's face and lines, sound,
+  particles, moving stars, camera shake.

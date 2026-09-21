@@ -232,7 +232,7 @@
   // ---- game: «Invasión» takes the whole screen; the fire waits behind it, switched off ----
   // Three.js and the game are ~750 KB that most days nobody needs, so their <script> tags are
   // added the first time someone plays. Classic scripts only: modules don't load from file://.
-  const GAME_SCRIPTS = ["vendor/three.min.js", "game/input.js", "game/scene.js", "game/game.js"];
+  const GAME_SCRIPTS = ["vendor/three.min.js", "game/input.js", "game/scene.js", "game/hud.js", "game/game.js"];
   const loaded = new Set();
   const loadScript = (src) => loaded.has(src) ? Promise.resolve() : new Promise((ok, fail) => {
     const s = document.createElement("script");

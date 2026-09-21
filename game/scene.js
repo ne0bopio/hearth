@@ -1,7 +1,7 @@
 // Scene: everything Three.js. The game (game.js) owns the state; this file only draws it.
 // World: x is sideways, y is up, the ship sits at z = 0 and the goblins come from -z toward it.
 // All models are built in code from a few primitives, merged into one geometry each with
-// vertex colors: the 40 saucers cost three draw calls (one InstancedMesh per kind).
+// vertex colors: the 40 saucers cost three draw calls (one InstancedMesh per kind), the shields one.
 const GameScene = (() => {
   // same palette as goblins.js
   const C = {
@@ -11,6 +11,7 @@ const GameScene = (() => {
   };
   const KINDS = ["cigar", "bottle", "boss"];
   const SAUCER = 1.3; // model radius 1.08 × this = the 1.4 that game.js collides against
+  const MOTHER = 1.25; // model radius 4.9 × this ≈ the 6.2 half-width game.js gives the mothership
   const DEG = Math.PI / 180;
 
   // ---- building: primitives -> one flat-shaded geometry with vertex colors ----
@@ -71,11 +72,18 @@ const GameScene = (() => {
   // from far away; the hat and what it carries do it up close.
   function saucerGeometry(kind) {
     const rim = { cigar: C.green, bottle: C.bone, boss: C.gold }[kind];
-    const dome = (color, y) => part(new THREE.SphereGeometry(0.43, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2), color, place([0, y, 0]));
-    const parts = [
+    return merge([
       part(new THREE.CylinderGeometry(1.0, 0.4, 0.3, 8), C.hull, place([0, -0.15, 0])),
       part(new THREE.CylinderGeometry(0.5, 1.0, 0.26, 8), C.hull2, place([0, 0.13, 0])),
       part(new THREE.CylinderGeometry(1.08, 1.08, 0.08, 8), rim, place([0, 0, 0])),
+      ...goblin(kind),
+    ]).scale(SAUCER, SAUCER, SAUCER);
+  }
+
+  // head, ears, hat and whatever it carries; sits on a saucer whose deck is at y = 0.26
+  function goblin(kind) {
+    const dome = (color, y) => part(new THREE.SphereGeometry(0.43, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2), color, place([0, y, 0]));
+    const parts = [
       part(new THREE.IcosahedronGeometry(0.4, 0), C.skin, place([0, 0.6, 0], [0, 0, 0], [1, 1.08, 1])),
       part(new THREE.ConeGeometry(0.11, 0.6, 4), C.skin, place([0.56, 0.74, 0], [0, 0, -65 * DEG])),
       part(new THREE.ConeGeometry(0.11, 0.6, 4), C.skin, place([-0.56, 0.74, 0], [0, 0, 65 * DEG])),
@@ -105,7 +113,37 @@ const GameScene = (() => {
         part(new THREE.IcosahedronGeometry(0.08, 0), C.green, place([0, 1.58, 0])),
       );
     }
-    return merge(parts).scale(SAUCER, SAUCER, SAUCER);
+    return parts;
+  }
+
+  // the mystery saucer: nobody at the wheel, bone white with a gold rim
+  function ufoGeometry() {
+    return merge([
+      part(new THREE.CylinderGeometry(1.6, 0.6, 0.36, 8), C.bone, place([0, -0.18, 0])),
+      part(new THREE.CylinderGeometry(0.75, 1.6, 0.3, 8), C.bone, place([0, 0.15, 0])),
+      part(new THREE.CylinderGeometry(1.72, 1.72, 0.1, 8), C.gold, place([0, 0, 0])),
+      part(new THREE.SphereGeometry(0.72, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2), C.green, place([0, 0.3, 0])),
+    ]).scale(SAUCER, SAUCER, SAUCER);
+  }
+
+  // the goblin mothership: one wide saucer, the squad boss on deck between his two lieutenants
+  function motherGeometry() {
+    const crew = (kind, x) => goblin(kind).map((g) => g.applyMatrix4(place([x, 0.55, 0.5], [0, 0, 0], [1.7, 1.7, 1.7])));
+    const parts = [
+      part(new THREE.CylinderGeometry(4.6, 1.6, 1.0, 12), C.hull, place([0, -0.5, 0])),
+      part(new THREE.CylinderGeometry(2.9, 4.6, 0.9, 12), C.hull2, place([0, 0.45, 0])),
+      part(new THREE.CylinderGeometry(4.9, 4.9, 0.24, 12), C.green, place([0, 0, 0])),
+      part(new THREE.CylinderGeometry(3.0, 3.0, 0.16, 12), C.gold, place([0, 0.95, 0])),
+      part(new THREE.ConeGeometry(1.3, 1.1, 8), C.green, place([0, -1.5, 0], [Math.PI, 0, 0])),
+      ...crew("cigar", -1.75), ...crew("boss", 0), ...crew("bottle", 1.75),
+    ];
+    for (const s of [-1, 1]) {
+      parts.push(
+        part(new THREE.BoxGeometry(0.55, 0.55, 2.2), C.gold, place([3.1 * s, -0.55, 3.2])),
+        part(new THREE.BoxGeometry(0.3, 0.3, 0.3), C.ember, place([3.1 * s, -0.55, 4.35])),
+      );
+    }
+    return merge(parts).scale(MOTHER, MOTHER, MOTHER);
   }
 
   // same stars every time, so a frozen ?at= capture always matches
@@ -125,8 +163,9 @@ const GameScene = (() => {
     return g;
   }
 
-  // counts: how many saucers of each kind the game will ever show at once; bullets: pool size
-  function create(container, { counts, bullets }) {
+  // counts: how many saucers of each kind the game will ever show at once; bullets, bombs: pool
+  // sizes; cells: how many shield blocks there can be; cell: [width, depth] of one
+  function create(container, { counts, bullets, bombs, cells, cell }) {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
     renderer.setClearColor(0x000000);
@@ -168,6 +207,31 @@ const GameScene = (() => {
       return m;
     });
 
+    // what the goblins drop: gold, so it never reads as one of yours
+    const bombGeo = new THREE.OctahedronGeometry(0.36);
+    const bombMat = new THREE.MeshBasicMaterial({ color: C.gold, fog: false });
+    const drops = Array.from({ length: bombs }, () => {
+      const m = new THREE.Mesh(bombGeo, bombMat);
+      m.visible = false;
+      scene.add(m);
+      return m;
+    });
+
+    const blocks = new THREE.InstancedMesh(new THREE.BoxGeometry(cell[0] * 0.92, 0.95, cell[1] * 0.92),
+      new THREE.MeshToonMaterial({ color: C.green2 }), cells);
+    blocks.frustumCulled = false;
+    scene.add(blocks);
+
+    const ufo = new THREE.Mesh(ufoGeometry(), toon);
+    ufo.visible = false;
+    scene.add(ufo);
+
+    // its own material, so a hit can flash it without lighting up everything else
+    const motherMat = new THREE.MeshToonMaterial({ vertexColors: true });
+    const mother = new THREE.Mesh(motherGeometry(), motherMat);
+    mother.visible = false;
+    scene.add(mother);
+
     const stars = new THREE.Points(starGeometry(420),
       new THREE.PointsMaterial({ color: C.bone, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.75 }));
     scene.add(stars);
@@ -196,8 +260,12 @@ const GameScene = (() => {
     // s: the game state. dt: seconds since the last draw (Infinity snaps the camera into place)
     function render(s, dt) {
       const lean = Math.max(-1.3, Math.min(1.3, s.ship.vx / s.ship.speed));
+      const down = s.ship.dead > 0 ? 1 - s.ship.dead / s.ship.respawn : 0; // hit: 0 -> 1 until it comes back
       ship.position.set(s.ship.x, Math.sin(s.t * 2.2) * 0.06, 0);
-      ship.rotation.set(0, -lean * 8 * DEG, -lean * 20 * DEG);
+      ship.rotation.set(0, -lean * 8 * DEG + down * 14, -lean * 20 * DEG);
+      ship.scale.setScalar(0.85 * Math.max(0, 1 - down * 2.5));
+      // spins away when hit and stays gone until it comes back; blinks while it can't be hurt
+      ship.visible = s.ship.dead > 0 ? down < 0.4 : s.ship.safe <= 0 || Math.floor(s.t * 10) % 2 === 0;
 
       // behind and above, looking down the field at ~27°, trailing the ship a little
       const want = s.ship.x * 0.35;
@@ -225,6 +293,40 @@ const GameScene = (() => {
         m.visible = !!(b && b.live);
         if (m.visible) m.position.set(b.x, 0, b.z);
       });
+      drops.forEach((m, i) => {
+        const b = s.bombs[i];
+        m.visible = !!(b && b.live);
+        if (m.visible) { m.position.set(b.x, 0, b.z); m.rotation.y = s.t * 9; }
+      });
+
+      let n = 0;
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.setScalar(1);
+      for (const c of s.cells) {
+        if (!c.live) continue;
+        dummy.position.set(c.x, -0.3, c.z);
+        dummy.updateMatrix();
+        blocks.setMatrixAt(n++, dummy.matrix);
+      }
+      blocks.count = n;
+      blocks.instanceMatrix.needsUpdate = true;
+
+      ufo.visible = !!s.ufo;
+      if (s.ufo) {
+        const k = s.ufo.dying > 0 ? s.ufo.dying / s.dieTime : 1;
+        ufo.position.set(s.ufo.x, 1.6 + (1 - k) * 1.5, s.ufo.z);
+        ufo.rotation.set(0, s.t * 2.5 + (1 - k) * 9, 0.12);
+        ufo.scale.setScalar(k);
+      }
+
+      mother.visible = !!s.mother;
+      if (s.mother) {
+        const m = s.mother, k = m.dying > 0 ? m.dying / m.dieTime : 1;
+        mother.position.set(m.x, 1.4 + Math.sin(s.t * 1.7) * 0.25 - (1 - k) * 3, m.z);
+        mother.rotation.set((1 - k) * 0.6, (1 - k) * 5, Math.sin(s.t * 0.9) * 0.06 + (1 - k) * 0.8);
+        mother.scale.setScalar(0.25 + 0.75 * k);
+        motherMat.emissive.setScalar(m.flash > 0 ? 0.55 : 0);
+      }
 
       renderer.render(scene, camera);
     }

@@ -3,7 +3,7 @@
 // Listeners exist only while the game is open (attach/detach).
 const GameInput = (() => {
   const keys = new Set();
-  const USED = ["ArrowLeft", "ArrowRight", "KeyA", "KeyD", "Space", "KeyP", "Escape"];
+  const USED = ["ArrowLeft", "ArrowRight", "KeyA", "KeyD", "Space", "KeyP", "Escape", "Enter", "NumpadEnter"];
   let el = null, on = {}, pointer = null, lastX = 0, drag = 0;
 
   function keydown(e) {
@@ -12,6 +12,7 @@ const GameInput = (() => {
     if (e.repeat) return;
     if (e.code === "Escape") return on.exit && on.exit();
     if (e.code === "KeyP") return on.pause && on.pause();
+    if (e.code.endsWith("Enter")) return on.confirm && on.confirm();
     keys.add(e.code);
   }
   function keyup(e) {
@@ -35,7 +36,7 @@ const GameInput = (() => {
     if (e.pointerId === pointer) pointer = null;
   }
 
-  // target: the element that takes the drags (the game canvas). handlers: { pause, exit }
+  // target: the element that takes the drags (the game canvas). handlers: { pause, exit, confirm }
   function attach(target, handlers) {
     el = target;
     on = handlers || {};

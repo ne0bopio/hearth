@@ -232,7 +232,7 @@
   // ---- game: «Invasión» takes the whole screen; the fire waits behind it, switched off ----
   // Three.js and the game are ~750 KB that most days nobody needs, so their <script> tags are
   // added the first time someone plays. Classic scripts only: modules don't load from file://.
-  const GAME_SCRIPTS = ["vendor/three.min.js", "game/input.js", "game/scene.js", "game/hud.js", "game/game.js"];
+  const GAME_SCRIPTS = ["vendor/three.min.js", "game/input.js", "game/scene.js", "game/hud.js", "game/sfx.js", "game/game.js"];
   const loaded = new Set();
   const loadScript = (src) => loaded.has(src) ? Promise.resolve() : new Promise((ok, fail) => {
     const s = document.createElement("script");
@@ -250,7 +250,13 @@
     Sound.set({ on: false });
     $("#game").hidden = false;
     GAME_SCRIPTS.reduce((p, src) => p.then(() => loadScript(src)), Promise.resolve())
-      .then(() => { if (gameOpen) Game.open({ layer: $("#game"), onExit: closeGame }); })
+      .then(() => {
+        if (!gameOpen) return;
+        Game.open({
+          layer: $("#game"), onExit: closeGame, lines: (cfg.game || {}).lines,
+          audio: { context: Sound.context, volume: () => state.volume }, // the panel's Volume rules the game too
+        });
+      })
       .catch((err) => { console.error(err); closeGame(); }); // no WebGL, a missing file: back to the fire
   }
   // Puts back only what openGame took. Sleep and the timer kept running and are left alone.

@@ -1,5 +1,8 @@
 // HUD: everything that is DOM on top of the 3D canvas. Score, record, lives, wave, the mothership's
-// health bar, the message banner, the pause and Game Over screens. It only reads the game state.
+// health bar, the message banner, the pause and Game Over screens, and the pilot: the martian's
+// face in a corner window, like a Star Fox wingman, with a speech bubble. There is one portrait,
+// so he reacts with his whole window (it shakes, pops, glows, goes grey) rather than with his face.
+// It only reads the game state.
 const GameHud = (() => {
   const WHY = {
     landed: "Los duendes se quedaron con la chimenea",
@@ -25,7 +28,8 @@ const GameHud = (() => {
       </div>
       <div class="g-mother" hidden><span>Nodriza</span><div class="g-bar"><b></b></div></div>
       <div class="g-msg" hidden></div>
-      <div class="g-help">← → mover · Espacio disparar · P pausa · Esc salir<br>Táctil: arrastra el dedo, dispara solo</div>
+      <div class="g-pilot"><img src="game/assets/marciano.webp" alt="" draggable="false"><div class="g-say" hidden></div></div>
+      <div class="g-help">← → mover · Espacio disparar · P pausa · Esc salir<br>Táctil: arrastra el dedo, dispara solo · Mando: cruceta, A, Start, Select</div>
       <div class="g-pause" hidden><div class="big">Pausa</div><div class="hint">P o el botón para seguir</div></div>
       <div class="g-over" hidden>
         <div class="big">Game Over</div>
@@ -43,7 +47,7 @@ const GameHud = (() => {
     const node = {
       wave: $(".g-wave"), points: $(".g-points"), best: $(".g-best"), lives: $(".g-lives"), msg: $(".g-msg"),
       mother: $(".g-mother"), bar: $(".g-bar b"), pause: $(".g-pause"), pauseBtn: $('[data-g="pause"]'),
-      over: $(".g-over"), why: $(".g-why"), final: $(".g-final"),
+      over: $(".g-over"), why: $(".g-why"), final: $(".g-final"), pilot: $(".g-pilot"), say: $(".g-say"),
     };
     el.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", (e) => {
       e.currentTarget.blur(); // or Space would press it again
@@ -63,6 +67,15 @@ const GameHud = (() => {
       }
       const text = s.msg && s.t < s.msg.until ? s.msg.text : "";
       if (changed("msg", text)) { node.msg.textContent = text; node.msg.hidden = !text; }
+
+      // the pilot: a new line restarts his reaction even if the mood is the same as the last one
+      const p = s.pilot && s.t < s.pilot.until ? s.pilot : null;
+      if (changed("say", p ? `${p.at}:${p.text}` : "")) {
+        node.say.textContent = p ? p.text : "";
+        node.say.hidden = !p;
+        node.pilot.className = "g-pilot";
+        if (p) { void node.pilot.offsetWidth; node.pilot.classList.add(p.mood); }
+      }
 
       const m = s.mother && !s.mother.dying && !s.over ? s.mother : null;
       if (changed("mother", !!m)) node.mother.hidden = !m;

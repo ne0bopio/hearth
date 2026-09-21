@@ -1,7 +1,8 @@
 // Scene: everything Three.js. The game (game.js) owns the state; this file only draws it.
 // World: x is sideways, y is up, the ship sits at z = 0 and the goblins come from -z toward it.
 // All models are built in code from a few primitives, merged into one geometry each with
-// vertex colors: the 40 saucers cost three draw calls (one InstancedMesh per kind), the shields one.
+// vertex colors: the 40 saucers cost three draw calls (one InstancedMesh per kind), the shields one,
+// every explosion on screen one (a single pool of points).
 const GameScene = (() => {
   // same palette as goblins.js
   const C = {
@@ -155,9 +156,10 @@ const GameScene = (() => {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
+  const STARS = { depth: 220, speed: 16 }; // a slab of stars this deep slides toward the camera
   function starGeometry(n) {
     const r = rng(7), pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) pos.set([(r() - 0.5) * 260, -12 + r() * 90, -70 - r() * 60], i * 3);
+    for (let i = 0; i < n; i++) pos.set([(r() - 0.5) * 300, -14 + r() * 60, -r() * STARS.depth], i * 3);
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     return g;
@@ -173,7 +175,7 @@ const GameScene = (() => {
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x000000, 45, 110);
-    const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 300);
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 480);
     const look = new THREE.Vector3();
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.3));
@@ -232,9 +234,78 @@ const GameScene = (() => {
     mother.visible = false;
     scene.add(mother);
 
-    const stars = new THREE.Points(starGeometry(420),
-      new THREE.PointsMaterial({ color: C.bone, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.75 }));
-    scene.add(stars);
+    // Two copies of the same slab of stars, one behind the other, sliding toward the camera and
+    // wrapping: endless flight for two draw calls and no per-star work.
+    const starGeo = starGeometry(520);
+    const starMat = new THREE.PointsMaterial({ color: C.bone, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.75 });
+    const stars = [new THREE.Points(starGeo, starMat), new THREE.Points(starGeo, starMat)];
+    stars.forEach((p) => { p.frustumCulled = false; scene.add(p); });
+
+    // ---- explosions: one pool of square points, additive, so fading is just going dark ----
+    const MAX = 700, GRAVITY = 9;
+    const pPos = new Float32Array(MAX * 3), pCol = new Float32Array(MAX * 3), pBase = new Float32Array(MAX * 3);
+    const pVel = new Float32Array(MAX * 3), pLife = new Float32Array(MAX), pRate = new Float32Array(MAX);
+    const sparkGeo = new THREE.BufferGeometry();
+    sparkGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
+    sparkGeo.setAttribute("color", new THREE.BufferAttribute(pCol, 3));
+    const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
+      size: 0.55, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    }));
+    sparks.frustumCulled = false;
+    scene.add(sparks);
+    const tones = (...hex) => hex.map((h) => new THREE.Color(h));
+    const PAL = {
+      cigar: tones(C.green, C.skin, C.ember), bottle: tones(C.bone, C.green, C.skin), boss: tones(C.gold, C.skin, C.ember),
+      shield: tones(C.green2, C.green), ship: tones(C.green, C.bone, C.ember), ufo: tones(C.gold, C.bone),
+      mother: tones(C.gold, C.green, C.ember, C.bone), spark: tones(C.bone, C.gold),
+    };
+    const chance = rng(11);
+    let nextSpark = 0, liveSparks = 0, quality = 1, shake = 0;
+
+    function burst(x, y, z, n, pal, speed) {
+      n = Math.max(1, Math.round(n * quality));
+      for (let k = 0; k < n; k++) {
+        const i = nextSpark, j = i * 3;
+        nextSpark = (nextSpark + 1) % MAX;
+        const a = chance() * Math.PI * 2, up = chance() * 2 - 0.6, v = speed * (0.35 + chance() * 0.65), c = pal[(chance() * pal.length) | 0];
+        pPos[j] = x; pPos[j + 1] = y; pPos[j + 2] = z;
+        pVel[j] = Math.cos(a) * v; pVel[j + 1] = up * v * 0.7; pVel[j + 2] = Math.sin(a) * v;
+        pBase[j] = c.r; pBase[j + 1] = c.g; pBase[j + 2] = c.b;
+        pLife[i] = 1;
+        pRate[i] = 1 / (0.45 + chance() * 0.55);
+      }
+    }
+
+    // Moves what only the picture cares about: sparks fly, the shake dies down. Once per game step,
+    // fed with that step's events, so a frozen ?at= frame has the same sparks every time.
+    function advance(s, dt) {
+      for (const e of s.events) {
+        if (e.k === "boom") burst(e.x, 0.4, e.z, 22, PAL[e.kind], 9);
+        else if (e.k === "chip") burst(e.x, 0, e.z, 4, PAL.shield, 4);
+        else if (e.k === "clang") burst(e.x, 0.6, e.z, 5, PAL.spark, 7);
+        else if (e.k === "ufoBoom") burst(e.x, 1.6, e.z, 40, PAL.ufo, 11);
+        else if (e.k === "hit") { burst(e.x, 0.2, 0, 70, PAL.ship, 12); shake = 1; }
+        else if (e.k === "motherBoom") { burst(e.x, 1.4, e.z, 160, PAL.mother, 16); shake = 0.7; }
+      }
+      if (s.mother && s.mother.dying > 0) { // it burns all the way down
+        burst(s.mother.x + (chance() - 0.5) * 9, 1.4, s.mother.z + (chance() - 0.5) * 5, 5, PAL.mother, 8);
+      }
+      shake = Math.max(0, shake - dt / 0.45);
+      liveSparks = 0;
+      for (let i = 0; i < MAX; i++) {
+        if (pLife[i] <= 0) continue;
+        const j = i * 3;
+        pLife[i] -= dt * pRate[i];
+        pVel[j + 1] -= GRAVITY * dt;
+        pPos[j] += pVel[j] * dt; pPos[j + 1] += pVel[j + 1] * dt; pPos[j + 2] += pVel[j + 2] * dt;
+        const f = pLife[i] > 0 ? pLife[i] * pLife[i] : 0;
+        pCol[j] = pBase[j] * f; pCol[j + 1] = pBase[j + 1] * f; pCol[j + 2] = pBase[j + 2] * f;
+        if (f > 0) liveSparks++;
+      }
+    }
+
+    // the game calls this when the frame rate sags: every burst gets smaller from then on
+    const lessSparks = () => { quality = Math.max(0.2, quality * 0.5); return quality; };
 
     // the same faint green grid as the panel, as a floor: it is what makes the depth readable
     const grid = new THREE.GridHelper(240, 60, C.green2, C.green2);
@@ -270,8 +341,18 @@ const GameScene = (() => {
       // behind and above, looking down the field at ~27°, trailing the ship a little
       const want = s.ship.x * 0.35;
       camX = camX === null ? want : camX + (want - camX) * Math.min(1, dt * 4);
-      camera.position.set(camX, 13.5, 14);
-      camera.lookAt(look.set(camX * 0.8, 0, -13));
+      // a hit rattles it: two fast sines, no dice, so the same instant always looks the same
+      const jx = Math.sin(s.t * 97) * 0.55 * shake, jy = Math.sin(s.t * 131) * 0.4 * shake;
+      camera.position.set(camX + jx, 13.5 + jy, 14);
+      camera.lookAt(look.set(camX * 0.8 + jx * 0.5, 0, -13));
+
+      // flying forward: stars and floor slide toward the camera and wrap
+      const d = (s.t * STARS.speed) % STARS.depth;
+      stars[0].position.z = d;
+      stars[1].position.z = d - STARS.depth;
+      grid.position.z = -60 + ((s.t * 7) % 4); // 4 = one grid square
+      sparks.visible = liveSparks > 0;
+      sparkGeo.attributes.position.needsUpdate = sparkGeo.attributes.color.needsUpdate = sparks.visible;
 
       const used = { cigar: 0, bottle: 0, boss: 0 };
       for (const e of s.enemies) {
@@ -341,7 +422,7 @@ const GameScene = (() => {
       renderer.domElement.remove();
     }
 
-    return { canvas: renderer.domElement, render, resize, dispose };
+    return { canvas: renderer.domElement, render, advance, lessSparks, resize, dispose };
   }
 
   return { create };

@@ -132,5 +132,8 @@ const Sound = (() => {
     });
   }
 
-  return { set, resume, chime, psst, clink };
+  // the game makes its own sounds on this same context (game/sfx.js), past `master`
+  const context = () => { ensure(); return ac; };
+
+  return { set, resume, chime, psst, clink, context };
 })();

@@ -1,5 +1,7 @@
 // Game «Invasión»: Space Invaders seen from behind the ship. This file owns the state, the rules
-// and the loop; scene.js draws the 3D, hud.js the DOM on top, input.js listens.
+// and the loop; scene.js draws the 3D, hud.js the DOM on top, sfx.js makes the noise, input.js
+// listens. The rules never call a sound or a spark by name: each step leaves events in s.events
+// ({ k: "boom", x, z, kind }) and the frame hands them to whoever cares.
 // Everything random comes from a seeded generator kept in the state, so a run is a pure function
 // of its seed and its inputs. For checking:
 //   index.html?game=1            opens the game straight away
@@ -25,9 +27,24 @@ const Game = (() => {
   const DIE = 0.28;          // seconds a shot saucer takes to spin away
   const STEP = 1 / 60;       // the ?at= simulation step
   const STORE = "hearth-invasion";
+  const STREAK = { every: 5, gap: 1.3 }; // kills this close together are a streak; he brags every fifth
 
-  let layer = null, onExit = null, view = null, hud = null, s = null;
+  // What the martian says, by moment. Juan can replace any of these lists from config.js (game.lines).
+  const LINES = {
+    start: ["¡Vámonos, que llegaron los duendes!", "A cazar duendes, bro"],
+    streak: ["Uno menos, bro", "¡Así, así!", "Caen como moscas", "Ando fino hoy"],
+    hit: ["¡Me dieron, me dieron!", "¡Ey, con cuidado!", "Eso dolió, bro"],
+    clear: ["Limpio, bro. Vienen más", "¿Eso era todo?"],
+    ufo: ["¡Platillo premiado!", "Ese venía de paseo"],
+    boss: ["Ahí viene la nodriza…", "Ese es el jefe de jefes"],
+    bossDown: ["¡Pa' la casa, nodriza!", "Y eso que venía grande"],
+    over: ["Me ganaron los duendes…", "La revancha, bro"],
+    retry: ["Otra, otra", "Ahora sí"],
+  };
+
+  let layer = null, onExit = null, view = null, hud = null, sfx = null, lines = null, s = null;
   let raf = 0, last = 0, paused = false, frozen = false, firstWave = 1;
+  let slow = 0, slowFor = 0; // frame-time average and how long it has been bad, for lessSparks
 
   // the record survives reboots; if storage fails the game just plays without one
   function loadBest() {
@@ -53,7 +70,11 @@ const Game = (() => {
       next: 0,     // when > 0: seconds until the next wave comes in
       over: "",    // "" while playing, then why it ended: "landed" | "shot"
       overT: 0,    // seconds the world keeps moving after that, before the loop stops
-      msg: null,   // { text, until }
+      msg: null,   // the banner: { text, until }
+      pilot: null, // the martian's bubble: { text, mood, at, until }
+      streak: 0, streakT: 0,
+      beat: 0, beatIn: 1, // the march: four notes that speed up with the formation
+      events: [],  // what happened this step, for sfx.js and the sparks in scene.js
     };
   }
 
@@ -66,6 +87,12 @@ const Game = (() => {
   }
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const say = (text, secs = 2.2) => { s.msg = { text, until: s.t + secs }; };
+  const emit = (k, o) => { s.events.push(Object.assign({ k }, o)); };
+  // mood drives how the face reacts (hud.js): "talk", "hype", "hit", "boss", "over"
+  function pilot(kind, mood = "talk", secs = 2.4) {
+    const set = (lines && Array.isArray(lines[kind]) && lines[kind].length ? lines : LINES)[kind];
+    s.pilot = { text: set[(rnd() * set.length) | 0], mood, at: s.t, until: s.t + secs };
+  }
 
   // ---- waves ----
   const isMotherWave = (n) => n % MOTHER.every === 0;
@@ -81,7 +108,8 @@ const Game = (() => {
     if (isMotherWave(s.wave)) {
       const n = s.wave / MOTHER.every, hp = 16 + 8 * n;
       s.mother = { n, x: 0, z: -70, t: 0, hp, max: hp, flash: 0, dying: 0, dieTime: MOTHER.die, volley: 0, fireIn: 3 };
-      say("Ahí viene la nodriza…", 2.8);
+      pilot("boss", "boss", 3);
+      emit("mother");
       return;
     }
     const lv = level(), z = START_Z + Math.min(lv, 6);
@@ -124,6 +152,8 @@ const Game = (() => {
     s.over = why;
     s.overT = 1.3;
     s.ship.vx = 0;
+    pilot("over", "over", Infinity);
+    emit("over");
     if (s.newBest) saveBest(s.best);
   }
   function shipHit() {
@@ -131,8 +161,9 @@ const Game = (() => {
     s.ship.dead = SHIP.respawn;
     s.ship.vx = 0;
     s.bombs.forEach((b) => { b.live = false; });
+    emit("hit", { x: s.ship.x });
     if (s.lives <= 0) return gameOver("shot");
-    say("¡Me dieron, me dieron!", 1.6);
+    pilot("hit", "hit", 1.8);
   }
 
   // the ?at= pilot: sweeps the field and never lets go of the trigger
@@ -172,7 +203,7 @@ const Game = (() => {
       sh.cool -= dt;
       if (c.fire && sh.cool <= 0) {
         const b = s.bullets.find((b) => !b.live);
-        if (b) { b.live = true; b.x = sh.x; b.z = -1.8; sh.cool = SHOT.every; }
+        if (b) { b.live = true; b.x = sh.x; b.z = -1.8; sh.cool = SHOT.every; emit("shot"); }
       }
     }
 
@@ -191,6 +222,12 @@ const Game = (() => {
       f.z += (f.zTarget - f.z) * Math.min(1, dt * 8);
       placeEnemies();
 
+      // the march: one low note per beat, and the beat follows how fast they are moving
+      if ((s.beatIn -= dt) <= 0) {
+        s.beatIn = clamp(0.95 / (f.fast * (1 + 3 * (1 - alive.length / (COLS * ROWS)))), 0.13, 0.95);
+        emit("step", { n: s.beat++ });
+      }
+
       // now and then the front goblin of some column drops one; more often on later waves
       s.bombIn -= dt;
       if (s.bombIn <= 0) {
@@ -206,6 +243,7 @@ const Game = (() => {
       if (!s.ufo && (s.ufoIn -= dt) <= 0 && alive.length > 6) {
         const dir = rnd() < 0.5 ? 1 : -1;
         s.ufo = { x: -dir * UFO.edge, z: UFO.z, dir, dying: 0, points: UFO.points[(rnd() * UFO.points.length) | 0] };
+        emit("ufo");
         s.ufoIn = 16 + rnd() * 12;
       }
     }
@@ -230,6 +268,7 @@ const Game = (() => {
           const wide = ++m.volley % 3 === 0, n = wide ? 5 : 3, spread = wide ? 5 : 2.6, vz = 15 + m.n;
           const aim = clamp(((s.ship.x - m.x) * vz) / -m.z, -9, 9); // sideways speed that lands on the ship
           for (let i = 0; i < n; i++) bomb(m.x + (i - (n - 1) / 2) * 1.2, m.z + 4, aim + (i - (n - 1) / 2) * spread, vz);
+          emit("volley");
         }
       }
     }
@@ -251,22 +290,35 @@ const Game = (() => {
       if (hit === m) {
         m.hp--;
         m.flash = 0.07;
+        emit("clang", { x: b.x, z: m.z + MOTHER.halfZ });
         if (m.hp <= 0) {
           m.dying = MOTHER.die;
           s.bombs.forEach((b) => { b.live = false; });
           score(500 * m.n);
           say(`Nodriza abajo · +${500 * m.n}`, 2.4);
+          pilot("bossDown", "hype", 2.8);
+          emit("motherBoom", { x: m.x, z: m.z });
         }
       } else if (hit === s.ufo) {
         hit.dying = DIE;
         score(hit.points);
         say(`Platillo · +${hit.points}`, 1.6);
+        pilot("ufo", "hype", 2);
+        emit("ufoBoom", { x: hit.x, z: hit.z });
       } else if ("row" in hit) {
         hit.alive = false;
         hit.dying = DIE;
         s.kills++;
         score(POINTS[hit.kind]);
-      } else hit.live = false; // a shield block: yes, your own shots chew it too
+        emit("boom", { x: hit.x, z: hit.z, kind: hit.kind });
+        s.streak = s.t - s.streakT < STREAK.gap ? s.streak + 1 : 1;
+        s.streakT = s.t;
+        // he brags, but never over something that matters more
+        if (s.streak % STREAK.every === 0 && !(s.pilot && s.t < s.pilot.until)) pilot("streak", "hype", 1.8);
+      } else { // a shield block: yes, your own shots chew it too
+        hit.live = false;
+        emit("chip", { x: hit.x, z: hit.z });
+      }
     }
 
     // ---- their shots: shields first, then you ----
@@ -279,7 +331,7 @@ const Game = (() => {
       for (const c of s.cells) {
         if (c.live && Math.abs(c.x - b.x) < SHIELD.w / 2 + BOMB.half && crossed(z0, b.z, c.z, SHIELD.d / 2) && (!cell || c.z < cell.z)) cell = c;
       }
-      if (cell) { cell.live = false; b.live = false; continue; }
+      if (cell) { cell.live = false; b.live = false; emit("chip", { x: cell.x, z: cell.z }); continue; }
       if (sh.dead <= 0 && sh.safe <= 0 && Math.abs(b.x - sh.x) < SHIP.half + BOMB.half && crossed(z0, b.z, 0, 1)) {
         b.live = false;
         shipHit();
@@ -292,7 +344,9 @@ const Game = (() => {
     // saucers flatten whatever shield they reach
     for (const e of alive) {
       if (!e.alive || e.z + R < SHIELD.z - SHIELD.d * 1.5) continue;
-      for (const c of s.cells) if (c.live && Math.abs(c.x - e.x) < R && Math.abs(c.z - e.z) < R) c.live = false;
+      for (const c of s.cells) {
+        if (c.live && Math.abs(c.x - e.x) < R && Math.abs(c.z - e.z) < R) { c.live = false; emit("chip", { x: c.x, z: c.z }); }
+      }
     }
 
     // ---- wave over, or game over ----
@@ -302,8 +356,17 @@ const Game = (() => {
       gameOver("landed");
     } else if (!m && !s.enemies.some((e) => e.alive)) {
       s.next = 1.6;
-      say("Limpio, bro. Vienen más");
+      pilot("clear", "hype");
+      emit("clear");
     }
+  }
+
+  // one game step plus what only the picture and the speakers care about
+  function tick(dt, c, loud) {
+    step(dt, c);
+    view.advance(s, dt);
+    if (loud) sfx.play(s.events);
+    s.events.length = 0;
   }
 
   function draw(dt) {
@@ -313,15 +376,24 @@ const Game = (() => {
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (now - last) / 1000); // a stalled tab must not teleport anything
+    const real = (now - last) / 1000, dt = Math.min(0.05, real); // a stalled tab must not teleport anything
     last = now;
-    step(dt, GameInput.read());
+    const c = GameInput.read();
+    if (!s) return; // Select on the gamepad closed the game from inside read()
+    tick(dt, c, true);
     draw(dt);
     if (s.over && s.overT <= 0) halt(); // Game Over is a still picture: nothing left to animate
+
+    // not a gaming PC: if it can't hold 45 fps for two seconds straight, explosions get smaller
+    slow += (Math.min(real, 0.25) - slow) * 0.05;
+    slowFor = slow > 1 / 45 ? slowFor + real : 0;
+    if (slowFor > 2) { view.lessSparks(); slowFor = 0; }
   }
   function run() {
     if (raf || paused || frozen) return;
     last = performance.now();
+    slow = 1 / 60; // a pause is not a slow frame
+    slowFor = 0;
     raf = requestAnimationFrame(frame);
   }
   function halt() {
@@ -341,7 +413,7 @@ const Game = (() => {
     if (!s || !s.over || frozen) return;
     s = newState();
     spawnWave();
-    say("Otra, otra", 1.8);
+    if (!s.mother) pilot("retry", "talk", 2);
     run();
   }
 
@@ -349,11 +421,13 @@ const Game = (() => {
   const swallow = (e) => e.stopPropagation();
   const onResize = () => { if (view) { view.resize(); if (!raf) draw(Infinity); } };
 
-  // o: { layer, onExit }. Throws if WebGL is not there; nothing is left behind in that case.
+  // o: { layer, onExit, lines, audio: { context, volume } }.
+  // Throws if WebGL is not there; nothing is left behind in that case.
   function open(o) {
     if (s) return;
     layer = o.layer;
     onExit = o.onExit;
+    lines = o.lines || null;
     const q = new URLSearchParams(location.search);
     frozen = q.has("at");
     firstWave = q.has("boss") ? MOTHER.every : Math.max(1, Math.floor(+q.get("wave")) || 1);
@@ -370,16 +444,17 @@ const Game = (() => {
     s = newState();
     spawnWave();
     hud = GameHud.create(layer, { pause: () => pause(), exit: close, retry });
+    sfx = GameSfx.create(o.audio || {});
     layer.addEventListener("pointerdown", swallow);
     addEventListener("resize", onResize);
-    GameInput.attach(view.canvas, { pause: () => pause(), exit: close, confirm: retry });
+    GameInput.attach(view.canvas, { pause: () => pause(), exit: close, confirm: retry, wake: sfx.resume });
 
     if (frozen) {
       const n = Math.round(Math.max(0, +q.get("at") || 0) / STEP);
-      for (let i = 0; i < n; i++) step(STEP, autopilot(s.t));
+      for (let i = 0; i < n; i++) tick(STEP, autopilot(s.t), false);
       draw(Infinity);
     } else {
-      if (!s.mother) say("¡Vámonos, que llegaron los duendes!", 2.6);
+      if (!s.mother) pilot("start", "talk", 2.8);
       run();
     }
   }
@@ -393,8 +468,9 @@ const Game = (() => {
     removeEventListener("resize", onResize);
     view.dispose();
     hud.remove();
+    sfx.close();
     const done = onExit;
-    s = view = hud = layer = onExit = null;
+    s = view = hud = sfx = lines = layer = onExit = null;
     paused = frozen = false;
     if (done) done();
   }
@@ -406,7 +482,7 @@ const Game = (() => {
     alive: s.enemies.filter((e) => e.alive).length, shots: s.bullets.filter((b) => b.live).length,
     bombs: s.bombs.filter((b) => b.live).length, cells: s.cells.filter((c) => c.live).length,
     ufo: s.ufo ? +s.ufo.x.toFixed(1) : null, mother: s.mother ? { hp: s.mother.hp, z: +s.mother.z.toFixed(1) } : null,
-    shipX: +s.ship.x.toFixed(2), formZ: +s.form.z.toFixed(2),
+    shipX: +s.ship.x.toFixed(2), formZ: +s.form.z.toFixed(2), pilot: s.pilot && s.t < s.pilot.until ? s.pilot.text : "",
   } : { open: false, looping: !!raf });
 
   return { open, close, pause, snapshot, isOpen: () => !!s };

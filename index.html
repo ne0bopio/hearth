@@ -89,10 +89,21 @@
           <button class="chip" id="goblin-call">Call one</button>
         </div>
       </div>
+
+      <div class="card">
+        <h2>Juego</h2>
+        <p class="hint">Invasión: los duendes vienen en platillos.</p>
+        <div class="row">
+          <button class="chip" id="game-play">Jugar</button>
+        </div>
+      </div>
     </section>
 
     <button class="chip done" id="close">Done</button>
   </main>
+
+  <!-- the game fills this layer when it opens (app.js loads vendor/three.min.js and game/ then) -->
+  <div id="game" hidden></div>
 
   <div id="alarm" hidden>
     <div class="stripe"></div>

@@ -14,6 +14,9 @@ Styled in Kick green on black.
   hearth, stops, looks at you, offers a cigar or a drink, and walks on. Tap it and it scurries off.
   They skip their turn while the panel is open, during sleep, or while the alarm rings.
 - `app.js` runs the panel, clock, timer, sleep and weather (Open-Meteo, no API key).
+- `game/` is «Invasión», a Space Invaders seen from behind the ship, drawn with three.js
+  (`vendor/three.min.js`, a classic-script build: see `vendor/README.md`). Nothing of it loads until
+  someone presses Jugar, and when the game closes its render loop and its WebGL context are gone.
 - `fonts/` holds Anton and Rajdhani (SIL Open Font License), so the type looks right offline.
 - It's a plain HTML page. Chromium opens it full screen (`--kiosk`) when he logs in.
 
@@ -38,5 +41,22 @@ The installer turns off screen blanking and the lock screen. Otherwise the fire 
 - Sleep 15m/30m/1h: the fire burns down and the sound fades out. Tap the black screen to relight it.
 - Goblins: Visits turns them on or off. Call one sends one right now. How often they come and
   what they say can be changed at the bottom of `config.js`.
+- Juego → Jugar: the game takes the whole screen; fire, crackle and goblins wait behind it.
 - Leave kiosk mode: Alt+F4 (needs a keyboard).
 - Update: `git pull --autostash && ./install.sh` from `~/hearth`.
+
+## The game: «Invasión»
+Goblins in saucers come down in formation; the martian's ship shoots them from below.
+
+| | Keyboard | Touch |
+|---|---|---|
+| Move | ← → or A / D | drag a finger sideways |
+| Shoot | Space | fires by itself while the finger is down |
+| Pause | P | Pausa button |
+| Back to the fire | Esc | Salir button |
+
+- If the Hearth timer goes off mid-game, the game pauses and the alarm shows on top. Sleep keeps
+  counting while you play; leaving the game doesn't restart it.
+- For checking: `index.html?game=1` opens the game directly. `index.html?game=1&at=12` plays 12 s
+  with an autopilot, draws that single frame and stops, so a screenshot always shows the same thing.
+- Built so far: phase 1 (it plays). Lives, score, enemy fire, shields and the mothership come next.

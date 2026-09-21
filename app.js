@@ -16,6 +16,7 @@
   // ---- video fire: if fire.mp4 is in the folder, it replaces the drawn fire ----
   const video = $("#fire-video");
   let videoMode = false;
+  let gameOpen = false; // the game has the screen: fire, crackle and goblins wait behind it
   const tintVideo = () => {
     video.style.filter = `hue-rotate(${(0.5 - state.warmth) * 16}deg) saturate(${0.85 + state.warmth * 0.4})`;
   };
@@ -27,7 +28,8 @@
     $("#flame-label").hidden = true; // flame height can't change a video
     video.hidden = false;
     tintVideo();
-    video.play().catch(() => {});
+    if (gameOpen) video.pause(); // `autoplay` would start it behind the game
+    else video.play().catch(() => {});
   }
   if (video.readyState >= 2) enableVideo();
   else video.addEventListener("loadeddata", enableVideo, { once: true });
@@ -43,7 +45,7 @@
     updateTimer();
     updateSleep();
     // a fresh page once a day keeps a browser that never closes healthy
-    if (d.getHours() === 4 && d.getMinutes() === 0 && performance.now() > 120000 && !sleep && timerEnd === null) {
+    if (d.getHours() === 4 && d.getMinutes() === 0 && performance.now() > 120000 && !sleep && timerEnd === null && !gameOpen) {
       location.reload();
     }
   }
@@ -125,6 +127,7 @@
     }
   }
   function ringAlarm() {
+    if (gameOpen && typeof Game !== "undefined") Game.pause(true); // the timer wins: the alarm shows over a paused game
     $("#alarm").hidden = false;
     Sound.chime();
     alarmLoop = setInterval(Sound.chime, 2500);
@@ -163,7 +166,7 @@
     Fire.set({ fade: Math.min(1, l * 1.3) }); // flames hold a while, then sink
     Sound.set({ level: l });
     $("#ambient").style.opacity = l === 0 ? "0" : "";
-    if (videoMode) {
+    if (videoMode && !gameOpen) {
       if (l === 0) video.pause();
       else if (video.paused) video.play().catch(() => {});
     }
@@ -217,7 +220,7 @@
     on: state.goblins,
     every: gcfg.every,
     lines: gcfg.lines,
-    canVisit: () => !panelOpen() && !sleep && $("#alarm").hidden,
+    canVisit: () => !panelOpen() && !sleep && !gameOpen && $("#alarm").hidden,
     onCue: (kind) => (kind === "cigar" ? Sound.psst() : Sound.clink()),
   });
   bindToggle("#goblin-toggle", "goblins", () => Goblins.set({ on: state.goblins }));
@@ -225,6 +228,42 @@
     hidePanel();
     setTimeout(Goblins.call, 400);
   });
+
+  // ---- game: «Invasión» takes the whole screen; the fire waits behind it, switched off ----
+  // Three.js and the game are ~750 KB that most days nobody needs, so their <script> tags are
+  // added the first time someone plays. Classic scripts only: modules don't load from file://.
+  const GAME_SCRIPTS = ["vendor/three.min.js", "game/input.js", "game/scene.js", "game/game.js"];
+  const loaded = new Set();
+  const loadScript = (src) => loaded.has(src) ? Promise.resolve() : new Promise((ok, fail) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => { loaded.add(src); ok(); };
+    s.onerror = () => { s.remove(); fail(new Error(`could not load ${src}`)); };
+    document.head.appendChild(s);
+  });
+
+  function openGame() {
+    if (gameOpen) return;
+    gameOpen = true;
+    hidePanel();
+    videoMode ? video.pause() : Fire.pause();
+    Sound.set({ on: false });
+    $("#game").hidden = false;
+    GAME_SCRIPTS.reduce((p, src) => p.then(() => loadScript(src)), Promise.resolve())
+      .then(() => { if (gameOpen) Game.open({ layer: $("#game"), onExit: closeGame }); })
+      .catch((err) => { console.error(err); closeGame(); }); // no WebGL, a missing file: back to the fire
+  }
+  // Puts back only what openGame took. Sleep and the timer kept running and are left alone.
+  function closeGame() {
+    if (!gameOpen) return;
+    gameOpen = false;
+    $("#game").hidden = true;
+    if (!videoMode) Fire.resume();
+    else if (sleepLevel > 0) video.play().catch(() => {});
+    Sound.set({ on: state.sound });
+  }
+  $("#game-play").addEventListener("click", openGame);
+  if (new URLSearchParams(location.search).has("game")) openGame();
 
   // ---- weather (Open-Meteo: free, no key) ----
   const WMO = [[0, "Clear"], [1, "Mostly clear"], [2, "Partly cloudy"], [3, "Overcast"], [48, "Fog"],

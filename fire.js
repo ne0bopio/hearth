@@ -172,8 +172,13 @@ const Fire = (() => {
     if ("warmth" in o) buildPalette();
   }
 
-  // stop drawing for good (the video fire took over)
+  // stop drawing: for good when the video fire takes over, for a while when the game opens
   const pause = () => { paused = true; };
+  const resume = () => {
+    if (!paused) return;
+    paused = false;
+    requestAnimationFrame(frame);
+  };
 
-  return { init, set, pause };
+  return { init, set, pause, resume };
 })();

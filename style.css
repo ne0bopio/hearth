@@ -109,10 +109,10 @@ header { display: flex; justify-content: space-between; align-items: flex-start;
 .spacer { flex: 1; }
 .stripe { flex: none; height: 10px; margin: 0 -4vw; background: var(--stripe); }
 
-/* five cards stay on one row down to ~1280px wide, so Done never drops off a short screen */
+/* six cards stay on one row down to ~1280px wide, so Done never drops off a short screen */
 .controls {
   display: grid; gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
 }
 .card {
   background: var(--card);
@@ -165,3 +165,33 @@ input[type="range"]::-webkit-slider-thumb {
 #alarm .big { font-family: var(--display); font-size: clamp(80px, 15vw, 230px); line-height: 0.9; text-transform: uppercase; color: var(--k); }
 #alarm .hint { padding: 0 4vw; font-size: 24px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: var(--g); }
 @keyframes flash { 50% { background: var(--w); } }
+
+/* game: a layer over the whole fireplace, under the alarm. The canvas takes the drags; the HUD
+   lets them through everywhere except on its buttons. */
+#game { position: fixed; inset: 0; z-index: 5; background: #000; touch-action: none; }
+#game canvas { touch-action: none; }
+.g-ui { position: absolute; inset: 0; pointer-events: none; }
+.g-ui .chip { pointer-events: auto; background: rgba(10, 10, 10, 0.78); }
+.g-ui .chip:active { background: rgba(83, 252, 24, 0.22); }
+.g-ui .chip[aria-pressed="true"] { background: var(--g); }
+.g-top { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; padding: 3vh 3vw; }
+.g-title { font-family: var(--display); font-size: clamp(30px, 4vw, 60px); line-height: 1; text-transform: uppercase; color: var(--g); text-shadow: 4px 4px 0 var(--k); }
+.g-msg {
+  position: absolute; left: 50%; top: 24vh; transform: translateX(-50%) rotate(-2deg);
+  padding: 0.25em 0.6em 0.2em; background: var(--g); color: var(--k);
+  font-family: var(--display); font-size: clamp(26px, 3.6vw, 60px); line-height: 1.05;
+  text-transform: uppercase; white-space: nowrap; filter: drop-shadow(6px 6px 0 var(--k));
+}
+.g-help {
+  position: absolute; left: 0; right: 0; bottom: 3vh; text-align: center;
+  font-weight: 700; font-size: clamp(15px, 1.5vw, 22px); line-height: 1.5; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--w); text-shadow: 0 2px 8px #000;
+  animation: g-help-out 0.8s 9s forwards;
+}
+@keyframes g-help-out { to { opacity: 0; } }
+.g-pause {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5vh;
+  background: rgba(0, 0, 0, 0.62);
+}
+.g-pause .big { font-family: var(--display); font-size: clamp(70px, 12vw, 190px); line-height: 0.9; text-transform: uppercase; color: var(--g); }
+.g-pause .hint { font-size: 22px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--w); }
